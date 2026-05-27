@@ -38,20 +38,6 @@ const api = {
     });
     return parseResponse(response);
   },
-  async removePurchase(id) {
-    const response = await fetch(`/api/purchases/${id}`, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Delete-Confirmation": "削除する"
-      },
-      body: JSON.stringify({ confirmation: "削除する" })
-    });
-    return parseResponse(response);
-  },
-  async listPurchases() {
-    const response = await fetch("/api/purchases");
-    return parseResponse(response);
   }
 };
 
@@ -130,7 +116,6 @@ function statusFor(lock) {
 
 function App() {
   const [locks, setLocks] = useState([]);
-  const [purchases, setPurchases] = useState([]);
   const [stripeEnabled, setStripeEnabled] = useState(false);
   const [dbProvider, setDbProvider] = useState("sqlite");
   const [secretText, setSecretText] = useState("");
@@ -194,9 +179,8 @@ function App() {
   }
 
   async function refreshAll() {
-    const [lockData, purchaseData] = await Promise.all([api.listLocks(), api.listPurchases()]);
+    const lockData = await api.listLocks();
     setLocks(lockData.locks);
-    setPurchases(purchaseData.purchases);
   }
 
   async function handleCreate(event) {
@@ -270,9 +254,6 @@ function App() {
       if (deleteDialog.kind === "lock") {
         await api.remove(deleteDialog.item.id);
         setMessage("ロックを削除しました。");
-      } else {
-        await api.removePurchase(deleteDialog.item.id);
-        setMessage("購入履歴を削除しました。");
       }
       setDeleteDialog(null);
       setDeleteText("");
@@ -291,7 +272,6 @@ function App() {
         <div className="stats" aria-label="ロック統計">
           <span>{locks.length} 件</span>
           <span>{openCount} 開封可能</span>
-          <span>{purchases.length} 購入履歴</span>
           <span>{dbProvider}</span>
           <span>{stripeEnabled ? "Stripe test ON" : "Demo payment"}</span>
         </div>
@@ -404,47 +384,13 @@ function App() {
         </section>
       </section>
 
-      <section className="history-panel">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Purchases</p>
-            <h2>購入履歴</h2>
-          </div>
-        </div>
-
-        {purchases.length === 0 ? (
-          <p className="empty">購入履歴はまだありません。</p>
-        ) : (
-          <div className="history-table" role="table" aria-label="購入履歴">
-            <div className="history-row header" role="row">
-              <span>日時</span>
-              <span>ロック</span>
-              <span>金額</span>
-              <span>状態</span>
-              <span>操作</span>
-            </div>
-            {purchases.map((purchase) => (
-              <div className="history-row" role="row" key={purchase.id}>
-                <span>{formatDate(purchase.createdAt)}</span>
-                <span>#{purchase.lockId} {purchase.lockPreview}</span>
-                <span>{formatPrice(purchase.amount, purchase.currency)}</span>
-                <span>{purchase.provider} / {purchase.status}</span>
-                <span>
-                  <button className="danger-button small-button" type="button" onClick={() => requestDelete("purchase", purchase)}>削除</button>
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
       {deleteDialog && (
         <div className="modal-backdrop" role="presentation">
           <div className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-title">
             <p className="eyebrow">Delete</p>
             <h2 id="delete-title">本当に削除しますか</h2>
             <p className="locked-copy">
-              {deleteDialog.kind === "lock" ? `Lock #${deleteDialog.item.id}` : `購入履歴 #${deleteDialog.item.id}`} をDBから削除します。
+              Lock #{deleteDialog.item.id} をDBから削除します。
               続けるには「削除する」と入力してください。
             </p>
             <input value={deleteText} onChange={(event) => setDeleteText(event.target.value)} placeholder="削除する" autoFocus />

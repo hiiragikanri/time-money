@@ -110,8 +110,7 @@ h3 {
 }
 
 .create-panel,
-.list-panel,
-.history-panel {
+.list-panel {
   border: 1px solid rgba(25, 25, 25, 0.12);
   border-radius: 8px;
   background: rgba(255, 253, 248, 0.9);
@@ -126,8 +125,7 @@ h3 {
   top: 20px;
 }
 
-.list-panel,
-.history-panel {
+.list-panel {
   padding: 24px;
 }
 
@@ -297,37 +295,6 @@ dd {
   margin-top: 16px;
 }
 
-.history-panel {
-  width: min(1180px, 100%);
-  margin: 18px auto 0;
-}
-
-.history-table {
-  display: grid;
-  gap: 8px;
-}
-
-.history-row {
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr) 120px 150px 86px;
-  gap: 12px;
-  align-items: center;
-  border-radius: 8px;
-  background: #fffefa;
-  padding: 12px;
-}
-
-.history-row.header {
-  background: #18211f;
-  color: #fff9ee;
-  font-weight: 850;
-}
-
-.small-button {
-  min-height: 36px;
-  padding: 0 12px;
-}
-
 button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
@@ -378,8 +345,7 @@ button:disabled {
   }
 
   .field-row,
-  .meta-grid,
-  .history-row {
+  .meta-grid {
     grid-template-columns: 1fr;
   }
 }
