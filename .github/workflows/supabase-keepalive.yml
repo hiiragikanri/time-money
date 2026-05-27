@@ -9,9 +9,14 @@ on:
 permissions:
   contents: read
 
+env:
+  # Current Supabase project used by the Render production app.
+  SUPABASE_PROJECT_REF: ztwzkcntmbjzmbwndxbf
+  PRODUCTION_API_BASE_URL: https://time-money.onrender.com
+
 jobs:
   ping:
-    name: Ping production API
+    name: Ping current Supabase through production API
     runs-on: ubuntu-latest
     steps:
       - name: Read locks through production app
@@ -22,7 +27,7 @@ jobs:
             --retry 3 \
             --retry-delay 10 \
             --max-time 120 \
-            https://time-or-money.onrender.com/api/locks)"
+            "$PRODUCTION_API_BASE_URL/api/locks")"
 
           python - <<'PY' "$response"
           import json
@@ -34,3 +39,5 @@ jobs:
 
           print(f"Keepalive OK: {len(data['locks'])} locks returned")
           PY
+
+          echo "Supabase project: $SUPABASE_PROJECT_REF"

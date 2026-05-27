@@ -343,7 +343,20 @@ func (a *app) handleConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	writeJSON(w, http.StatusOK, configResponse{StripeEnabled: a.stripeKey != "", DBProvider: a.dialect})
+	writeJSON(w, http.StatusOK, configResponse{StripeEnabled: a.stripeEnabled(), DBProvider: a.dialect})
+}
+
+func (a *app) stripeEnabled() bool {
+	return a.stripeKey != "" && truthyEnv("APP_PAYMENTS_ENABLED")
+}
+
+func truthyEnv(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on", "enabled":
+		return true
+	default:
+		return false
+	}
 }
 
 func readDeleteConfirmation(r *http.Request) bool {
@@ -561,8 +574,8 @@ func (a *app) getLock(w http.ResponseWriter, id int64) {
 }
 
 func (a *app) createStripeCheckout(w http.ResponseWriter, id int64) {
-	if a.stripeKey == "" {
-		writeError(w, http.StatusServiceUnavailable, "stripe is not configured")
+	if !a.stripeEnabled() {
+		writeError(w, http.StatusServiceUnavailable, "payments are disabled")
 		return
 	}
 
@@ -600,8 +613,8 @@ func (a *app) handleStripeCheckoutComplete(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if a.stripeKey == "" {
-		writeError(w, http.StatusBadRequest, "stripe is not configured")
+	if !a.stripeEnabled() {
+		writeError(w, http.StatusBadRequest, "payments are disabled")
 		return
 	}
 

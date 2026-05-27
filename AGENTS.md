@@ -7,7 +7,7 @@ Time or Money is a small single-user app for creating text locks that open after
 - Frontend: React from CDN, source in `frontend/`
 - Backend: Go HTTP server in `backend/`
 - Database: SQLite locally by default, Supabase/Postgres in production through `DATABASE_URL`
-- Production URL: `https://time-or-money.onrender.com`
+- Production URL: `https://time-money.onrender.com`
 - GitHub repo: `sutec13/time_or_money`
 
 ## Run Locally
@@ -46,7 +46,7 @@ Render environment variables:
 
 ```env
 DATABASE_URL="Supabase Postgres connection string"
-PUBLIC_BASE_URL="https://time-or-money.onrender.com"
+PUBLIC_BASE_URL="https://time-money.onrender.com"
 APP_ENV="production"
 STRIPE_SECRET_KEY="sk_test_or_sk_live..."
 STRIPE_WEBHOOK_SECRET="whsec_..."
@@ -60,7 +60,7 @@ STRIPE_WEBHOOK_SECRET="whsec_..."
 - Redirect completion route: `POST /api/stripe/checkout/complete?session_id=...`
 - Webhook route: `POST /api/stripe/webhook`
 - Required webhook event: `checkout.session.completed`
-- Webhook endpoint URL: `https://time-or-money.onrender.com/api/stripe/webhook`
+- Webhook endpoint URL: `https://time-money.onrender.com/api/stripe/webhook`
 
 The webhook is the durable payment path. The browser redirect is only a convenience so the UI updates immediately.
 

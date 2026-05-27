@@ -140,6 +140,44 @@ func TestPurchaseHistoryRouteIsNotAvailable(t *testing.T) {
 	}
 }
 
+func TestStripeConfigRequiresPaymentsFlag(t *testing.T) {
+	t.Setenv("APP_PAYMENTS_ENABLED", "")
+	application := newTestApp(t)
+	application.stripeKey = "sk_test_123"
+
+	request := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+	recorder := httptest.NewRecorder()
+
+	application.handleConfig(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected config status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var config configResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &config); err != nil {
+		t.Fatal(err)
+	}
+	if config.StripeEnabled {
+		t.Fatal("expected stripe to stay disabled without APP_PAYMENTS_ENABLED")
+	}
+}
+
+func TestStripeCheckoutIsDisabledByDefault(t *testing.T) {
+	t.Setenv("APP_PAYMENTS_ENABLED", "")
+	application := newTestApp(t)
+	application.stripeKey = "sk_test_123"
+
+	request := httptest.NewRequest(http.MethodPost, "/api/locks/1/checkout", nil)
+	recorder := httptest.NewRecorder()
+
+	application.handleLockByID(recorder, request)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected checkout status 503, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestDevReloadRouteIsHiddenInProduction(t *testing.T) {
 	application := newTestApp(t)
 	application.devMode = false

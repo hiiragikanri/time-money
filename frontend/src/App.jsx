@@ -17,16 +17,6 @@ const api = {
     });
     return parseResponse(response);
   },
-  async createCheckout(id) {
-    const response = await fetch(`/api/locks/${id}/checkout`, { method: "POST" });
-    return parseResponse(response);
-  },
-  async completeCheckout(sessionId) {
-    const response = await fetch(`/api/stripe/checkout/complete?session_id=${encodeURIComponent(sessionId)}`, {
-      method: "POST"
-    });
-    return parseResponse(response);
-  },
   async remove(id) {
     const response = await fetch(`/api/locks/${id}`, {
       method: "DELETE",
@@ -73,14 +63,6 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
-function formatPrice(amount, currency = "JPY") {
-  return new Intl.NumberFormat("ja-JP", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0
-  }).format(amount);
-}
-
 function formatUnlockTime(lock) {
   if (lock.unlockLocal) {
     return `${lock.unlockLocal.replace("T", " ")} (${lock.timezoneName})`;
@@ -105,8 +87,6 @@ function formatRemaining(ms) {
 
 function statusFor(lock) {
   if (lock.unlocked) {
-    if (lock.unlockReason === "paid_stripe") return "Stripeで開封";
-    if (lock.unlockReason === "paid_demo") return "デモ購入で開封";
     return "開封済み";
   }
   if (lock.isOpen || getRemaining(lock.unlockAt) <= 0) return "時間で開封可能";
@@ -115,12 +95,10 @@ function statusFor(lock) {
 
 function App() {
   const [locks, setLocks] = useState([]);
-  const [stripeEnabled, setStripeEnabled] = useState(false);
   const [lockName, setLockName] = useState("");
   const [secretText, setSecretText] = useState("");
   const [unlockAt, setUnlockAt] = useState(defaultUnlockTime());
   const [unlockAtTouched, setUnlockAtTouched] = useState(false);
-  const [priceAmount, setPriceAmount] = useState("500");
   const [message, setMessage] = useState("");
   const [deleteDialog, setDeleteDialog] = useState(null);
   const [deleteText, setDeleteText] = useState("");
@@ -149,22 +127,8 @@ function App() {
   }, [tick, locks]);
 
   async function bootstrap() {
-    const config = await api.config();
-    setStripeEnabled(config.stripeEnabled);
-
     const params = new URLSearchParams(window.location.search);
-    const sessionId = params.get("checkout_session_id");
-    if (sessionId) {
-      setMessage("Stripe テスト決済を確認しています...");
-      try {
-        await api.completeCheckout(sessionId);
-        setMessage("Stripe テスト決済で開封しました。");
-        window.history.replaceState({}, "", window.location.pathname);
-      } catch (error) {
-        setMessage(error.message);
-      }
-    } else if (params.get("checkout_cancelled")) {
-      setMessage("Stripe 決済をキャンセルしました。");
+    if (params.get("checkout_session_id") || params.get("checkout_cancelled")) {
       window.history.replaceState({}, "", window.location.pathname);
     }
 
@@ -189,12 +153,6 @@ function App() {
       return;
     }
 
-    const parsedPrice = priceAmount === "" ? 500 : Number(priceAmount);
-    if (!Number.isInteger(parsedPrice) || parsedPrice <= 0) {
-      setMessage("金額は1円以上の整数で入力してください。");
-      return;
-    }
-
     try {
       await api.createLock({
         name: lockName.trim(),
@@ -202,35 +160,13 @@ function App() {
         unlockAt: localToRFC3339(unlockAt),
         unlockLocal: unlockAt,
         timezoneName: timezoneName(),
-        timezoneOffsetMinutes: timezoneOffsetMinutes(unlockAt),
-        priceAmount: parsedPrice
+        timezoneOffsetMinutes: timezoneOffsetMinutes(unlockAt)
       });
       setLockName("");
       setSecretText("");
       setUnlockAt(defaultUnlockTime());
       setUnlockAtTouched(false);
-      setPriceAmount("500");
       setMessage("ロックを作成しました。");
-      await refreshAll();
-    } catch (error) {
-      setMessage(error.message);
-    }
-  }
-
-  async function handlePay(lock) {
-    setMessage("");
-    try {
-      const result = await api.createCheckout(lock.id);
-      if (result.mode === "stripe" && result.checkoutUrl) {
-        window.location.href = result.checkoutUrl;
-        return;
-      }
-      if (result.mode === "already_open") {
-        setMessage("このロックはすでに開封できます。");
-        await refreshAll();
-        return;
-      }
-      setMessage("Stripeの決済設定を確認してください。");
       await refreshAll();
     } catch (error) {
       setMessage(error.message);
@@ -284,34 +220,21 @@ function App() {
               value={secretText}
               onChange={(event) => setSecretText(event.target.value)}
               rows="8"
-              placeholder="未来の自分、または支払った人だけが読めるテキスト"
+              placeholder="未来の自分だけが読めるテキスト"
             />
           </label>
 
-          <div className="field-row">
-            <label className="field">
-              <span>開封日時</span>
-              <input
-                type="datetime-local"
-                value={unlockAt}
-                onChange={(event) => {
-                  setUnlockAtTouched(true);
-                  setUnlockAt(event.target.value);
-                }}
-              />
-            </label>
-            <label className="field">
-              <span>金額</span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={priceAmount}
-                onChange={(event) => setPriceAmount(event.target.value)}
-                placeholder="500"
-              />
-            </label>
-          </div>
+          <label className="field">
+            <span>開封日時</span>
+            <input
+              type="datetime-local"
+              value={unlockAt}
+              onChange={(event) => {
+                setUnlockAtTouched(true);
+                setUnlockAt(event.target.value);
+              }}
+            />
+          </label>
 
           <button className="primary-button" type="submit">ロックを作る</button>
           {message && <p className="message">{message}</p>}
@@ -342,7 +265,6 @@ function App() {
                         <span className={`status ${visible ? "open" : "locked"}`}>{statusFor(lock)}</span>
                         <h3>{lock.name || `Lock #${lock.id}`}</h3>
                       </div>
-                      <strong>{formatPrice(lock.priceAmount, lock.currency)}</strong>
                     </div>
 
                     <dl className="meta-grid">
@@ -359,11 +281,6 @@ function App() {
                     {visible && <pre className="secret-text">{lock.secretText}</pre>}
 
                     <div className="card-actions">
-                      {!visible && (
-                        <button className="pay-button" type="button" disabled={!stripeEnabled} onClick={() => handlePay(lock)}>
-                          {stripeEnabled ? "Stripeテスト決済へ" : "Stripe未設定"}
-                        </button>
-                      )}
                       <button className="danger-button" type="button" onClick={() => requestDelete("lock", lock)}>削除</button>
                     </div>
                   </article>
