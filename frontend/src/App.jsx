@@ -1,4 +1,4 @@
-const { useEffect, useMemo, useState } = React;
+const { useEffect, useState } = React;
 
 const api = {
   async config() {
@@ -116,7 +116,6 @@ function statusFor(lock) {
 function App() {
   const [locks, setLocks] = useState([]);
   const [stripeEnabled, setStripeEnabled] = useState(false);
-  const [dbProvider, setDbProvider] = useState("sqlite");
   const [lockName, setLockName] = useState("");
   const [secretText, setSecretText] = useState("");
   const [unlockAt, setUnlockAt] = useState(defaultUnlockTime());
@@ -127,11 +126,6 @@ function App() {
   const [deleteText, setDeleteText] = useState("");
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
-
-  const openCount = useMemo(
-    () => locks.filter((lock) => lock.unlocked || lock.isOpen || getRemaining(lock.unlockAt) <= 0).length,
-    [locks, tick]
-  );
 
   useEffect(() => {
     bootstrap().finally(() => setLoading(false));
@@ -157,7 +151,6 @@ function App() {
   async function bootstrap() {
     const config = await api.config();
     setStripeEnabled(config.stripeEnabled);
-    setDbProvider(config.dbProvider || "sqlite");
 
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get("checkout_session_id");
@@ -267,18 +260,6 @@ function App() {
 
   return (
     <main className="app-shell">
-      <section className="hero">
-        <div>
-          <p className="eyebrow">Time or Money</p>
-        </div>
-        <div className="stats" aria-label="ロック統計">
-          <span>{locks.length} 件</span>
-          <span>{openCount} 開封可能</span>
-          <span>{dbProvider}</span>
-          <span>{stripeEnabled ? "Stripe test ON" : "Stripe未設定"}</span>
-        </div>
-      </section>
-
       <section className="layout">
         <form className="create-panel" onSubmit={handleCreate}>
           <div>

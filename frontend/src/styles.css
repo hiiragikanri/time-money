@@ -34,15 +34,6 @@ button {
     #f3f0ea;
 }
 
-.hero {
-  width: min(1180px, 100%);
-  margin: 0 auto 22px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 22px;
-}
-
 .eyebrow {
   margin: 0 0 8px;
   color: #a73744;
@@ -79,14 +70,6 @@ h3 {
   font-size: 1.25rem;
 }
 
-.stats {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.stats span,
 .status {
   min-height: 34px;
   display: inline-flex;
@@ -326,18 +309,8 @@ button:disabled {
     padding: 16px;
   }
 
-  .hero,
   .layout {
     grid-template-columns: 1fr;
-  }
-
-  .hero {
-    display: grid;
-    align-items: start;
-  }
-
-  .stats {
-    justify-content: flex-start;
   }
 
   .create-panel {
