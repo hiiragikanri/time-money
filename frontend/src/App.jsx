@@ -102,6 +102,7 @@ function App() {
   const [message, setMessage] = useState("");
   const [deleteDialog, setDeleteDialog] = useState(null);
   const [deleteText, setDeleteText] = useState("");
+  const [copiedLockId, setCopiedLockId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
@@ -194,6 +195,30 @@ function App() {
     }
   }
 
+  async function copySecretText(lock) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(lock.secretText);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = lock.secretText;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.top = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setCopiedLockId(lock.id);
+      window.setTimeout(() => {
+        setCopiedLockId((current) => (current === lock.id ? null : current));
+      }, 1600);
+    } catch (error) {
+      setMessage("コピーできませんでした。");
+    }
+  }
+
   return (
     <main className="app-shell">
       <section className="layout">
@@ -278,7 +303,14 @@ function App() {
                       </div>
                     </dl>
 
-                    {visible && <pre className="secret-text">{lock.secretText}</pre>}
+                    {visible && (
+                      <div className="secret-block">
+                        <pre className="secret-text">{lock.secretText}</pre>
+                        <button className="copy-button" type="button" onClick={() => copySecretText(lock)}>
+                          {copiedLockId === lock.id ? "コピー済み" : "コピー"}
+                        </button>
+                      </div>
+                    )}
 
                     <div className="card-actions">
                       <button className="danger-button" type="button" onClick={() => requestDelete("lock", lock)}>削除</button>

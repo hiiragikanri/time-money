@@ -248,6 +248,11 @@ dd {
   font-weight: 800;
 }
 
+.secret-block {
+  display: grid;
+  gap: 10px;
+}
+
 .secret-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -257,6 +262,17 @@ dd {
   color: #fff9ee;
   padding: 16px;
   line-height: 1.65;
+}
+
+.copy-button {
+  justify-self: end;
+  min-height: 40px;
+  border: 1px solid rgba(0, 121, 107, 0.22);
+  border-radius: 8px;
+  background: rgba(0, 121, 107, 0.09);
+  color: #005b50;
+  padding: 0 14px;
+  font-weight: 850;
 }
 
 .locked-copy {
