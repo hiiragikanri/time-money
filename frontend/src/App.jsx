@@ -17,6 +17,14 @@ const api = {
     });
     return parseResponse(response);
   },
+  async updateUnlockTime(id, payload) {
+    const response = await fetch(`/api/locks/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    return parseResponse(response);
+  },
   async remove(id) {
     const response = await fetch(`/api/locks/${id}`, {
       method: "DELETE",
@@ -103,6 +111,7 @@ function App() {
   const [deleteDialog, setDeleteDialog] = useState(null);
   const [deleteText, setDeleteText] = useState("");
   const [copiedLockId, setCopiedLockId] = useState(null);
+  const [unlockEdits, setUnlockEdits] = useState({});
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
@@ -219,6 +228,41 @@ function App() {
     }
   }
 
+  function editableUnlockValue(lock) {
+    return unlockEdits[lock.id] ?? lock.unlockLocal ?? defaultUnlockTime();
+  }
+
+  function setEditableUnlockValue(lock, value) {
+    setUnlockEdits((current) => ({ ...current, [lock.id]: value }));
+  }
+
+  async function handleUpdateUnlockTime(lock) {
+    const nextUnlockAt = editableUnlockValue(lock);
+    if (!nextUnlockAt) {
+      setMessage("開封日時を入力してください。");
+      return;
+    }
+
+    setMessage("");
+    try {
+      await api.updateUnlockTime(lock.id, {
+        unlockAt: localToRFC3339(nextUnlockAt),
+        unlockLocal: nextUnlockAt,
+        timezoneName: timezoneName(),
+        timezoneOffsetMinutes: timezoneOffsetMinutes(nextUnlockAt)
+      });
+      setUnlockEdits((current) => {
+        const next = { ...current };
+        delete next[lock.id];
+        return next;
+      });
+      setMessage("開封日時を更新しました。");
+      await refreshAll();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
   return (
     <main className="app-shell">
       <section className="layout">
@@ -283,6 +327,7 @@ function App() {
               {locks.map((lock) => {
                 const canOpenByTime = lock.isOpen || getRemaining(lock.unlockAt) <= 0;
                 const visible = lock.unlocked || canOpenByTime;
+                const canChangeUnlockTime = !lock.unlocked && canOpenByTime;
                 return (
                   <article className="lock-card" key={lock.id}>
                     <div className="lock-card-header">
@@ -308,6 +353,22 @@ function App() {
                         <pre className="secret-text">{lock.secretText}</pre>
                         <button className="copy-button" type="button" onClick={() => copySecretText(lock)}>
                           {copiedLockId === lock.id ? "コピー済み" : "コピー"}
+                        </button>
+                      </div>
+                    )}
+
+                    {canChangeUnlockTime && (
+                      <div className="relock-panel">
+                        <label className="field">
+                          <span>開封日時を変更</span>
+                          <input
+                            type="datetime-local"
+                            value={editableUnlockValue(lock)}
+                            onChange={(event) => setEditableUnlockValue(lock, event.target.value)}
+                          />
+                        </label>
+                        <button className="ghost-button" type="button" onClick={() => handleUpdateUnlockTime(lock)}>
+                          更新
                         </button>
                       </div>
                     )}

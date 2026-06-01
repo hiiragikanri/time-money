@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -128,6 +129,107 @@ func TestPublicUnlockRouteIsNotAvailable(t *testing.T) {
 	}
 }
 
+func TestUpdateUnlockTimeForTimeOpenedLock(t *testing.T) {
+	application := newTestApp(t)
+	body, _ := json.Marshal(createLockRequest{
+		Name:       "Letter",
+		SecretText: "secret",
+		UnlockAt:   time.Now().Add(-time.Hour).UTC().Format(time.RFC3339),
+	})
+	createRequest := httptest.NewRequest(http.MethodPost, "/api/locks", bytes.NewReader(body))
+	createRecorder := httptest.NewRecorder()
+	application.createLock(createRecorder, createRequest)
+
+	var created lockItem
+	if err := json.Unmarshal(createRecorder.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+
+	nextUnlock := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+	updateBody, _ := json.Marshal(updateUnlockTimeRequest{UnlockAt: nextUnlock})
+	request := httptest.NewRequest(http.MethodPatch, "/api/locks/"+strconv.FormatInt(created.ID, 10), bytes.NewReader(updateBody))
+	recorder := httptest.NewRecorder()
+
+	application.handleLockByID(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected update status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var updated lockItem
+	if err := json.Unmarshal(recorder.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Name != "Letter" {
+		t.Fatalf("expected name to stay unchanged, got %q", updated.Name)
+	}
+	if updated.SecretText != "" {
+		t.Fatal("expected secret text to be hidden after moving unlock time into the future")
+	}
+	if updated.IsOpen {
+		t.Fatal("expected lock to be closed after moving unlock time into the future")
+	}
+	if updated.UnlockAt != nextUnlock {
+		t.Fatalf("expected unlock time %q, got %q", nextUnlock, updated.UnlockAt)
+	}
+}
+
+func TestUpdateUnlockTimeRejectsStillLockedLock(t *testing.T) {
+	application := newTestApp(t)
+	body, _ := json.Marshal(createLockRequest{
+		SecretText: "secret",
+		UnlockAt:   time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+	})
+	createRequest := httptest.NewRequest(http.MethodPost, "/api/locks", bytes.NewReader(body))
+	createRecorder := httptest.NewRecorder()
+	application.createLock(createRecorder, createRequest)
+
+	var created lockItem
+	if err := json.Unmarshal(createRecorder.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+
+	nextUnlock := time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339)
+	updateBody, _ := json.Marshal(updateUnlockTimeRequest{UnlockAt: nextUnlock})
+	request := httptest.NewRequest(http.MethodPatch, "/api/locks/"+strconv.FormatInt(created.ID, 10), bytes.NewReader(updateBody))
+	recorder := httptest.NewRecorder()
+
+	application.handleLockByID(recorder, request)
+
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected update status 409, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestUpdateUnlockTimeRejectsPaidLock(t *testing.T) {
+	application := newTestApp(t)
+	body, _ := json.Marshal(createLockRequest{
+		SecretText: "paid secret",
+		UnlockAt:   time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+	})
+	createRequest := httptest.NewRequest(http.MethodPost, "/api/locks", bytes.NewReader(body))
+	createRecorder := httptest.NewRecorder()
+	application.createLock(createRecorder, createRequest)
+
+	var created lockItem
+	if err := json.Unmarshal(createRecorder.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := application.recordUnlock(created.ID, "stripe", "cs_test_relock", "paid_stripe"); err != nil {
+		t.Fatalf("record unlock: %v", err)
+	}
+
+	nextUnlock := time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339)
+	updateBody, _ := json.Marshal(updateUnlockTimeRequest{UnlockAt: nextUnlock})
+	request := httptest.NewRequest(http.MethodPatch, "/api/locks/"+strconv.FormatInt(created.ID, 10), bytes.NewReader(updateBody))
+	recorder := httptest.NewRecorder()
+
+	application.handleLockByID(recorder, request)
+
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected update status 409, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestPurchaseHistoryRouteIsNotAvailable(t *testing.T) {
 	application := newTestApp(t)
 	request := httptest.NewRequest(http.MethodGet, "/api/purchases", nil)
@@ -160,6 +262,23 @@ func TestStripeConfigRequiresPaymentsFlag(t *testing.T) {
 	}
 	if config.StripeEnabled {
 		t.Fatal("expected stripe to stay disabled without APP_PAYMENTS_ENABLED")
+	}
+}
+
+func TestPostgresTargetDescriptionDoesNotExposePassword(t *testing.T) {
+	description := postgresTargetDescription("postgresql://postgres.abc:super-secret%21@aws-0-us-east-1.pooler.supabase.com:6543/postgres")
+
+	if strings.Contains(description, "super-secret") {
+		t.Fatalf("description exposed password: %s", description)
+	}
+	if !strings.Contains(description, "user=postgres.abc") {
+		t.Fatalf("description did not include user: %s", description)
+	}
+	if !strings.Contains(description, "host=aws-0-us-east-1.pooler.supabase.com:6543") {
+		t.Fatalf("description did not include host: %s", description)
+	}
+	if !strings.Contains(description, "database=postgres") {
+		t.Fatalf("description did not include database: %s", description)
 	}
 }
 

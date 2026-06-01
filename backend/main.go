@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -63,6 +64,13 @@ type createLockRequest struct {
 	TimezoneName          string `json:"timezoneName"`
 	TimezoneOffsetMinutes *int   `json:"timezoneOffsetMinutes"`
 	PriceAmount           *int   `json:"priceAmount"`
+}
+
+type updateUnlockTimeRequest struct {
+	UnlockAt              string `json:"unlockAt"`
+	UnlockLocal           string `json:"unlockLocal"`
+	TimezoneName          string `json:"timezoneName"`
+	TimezoneOffsetMinutes *int   `json:"timezoneOffsetMinutes"`
 }
 
 type deleteRequest struct {
@@ -195,7 +203,10 @@ func openDB() (*sql.DB, string, error) {
 			db.SetMaxOpenConns(5)
 			db.SetMaxIdleConns(2)
 			db.SetConnMaxLifetime(30 * time.Minute)
-			return db, "postgres", db.Ping()
+			if err := db.Ping(); err != nil {
+				return db, "postgres", fmt.Errorf("connect postgres %s: %w", postgresTargetDescription(databaseURL), err)
+			}
+			return db, "postgres", nil
 		}
 	}
 
@@ -226,6 +237,30 @@ func postgresURL(value string) string {
 	}
 	parsed.RawQuery = query.Encode()
 	return parsed.String()
+}
+
+func postgresTargetDescription(value string) string {
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return "(invalid DATABASE_URL)"
+	}
+
+	user := parsed.User.Username()
+	if user == "" {
+		user = "(missing user)"
+	}
+
+	database := strings.TrimPrefix(parsed.Path, "/")
+	if database == "" {
+		database = "(missing database)"
+	}
+
+	host := parsed.Host
+	if host == "" {
+		host = "(missing host)"
+	}
+
+	return fmt.Sprintf("(user=%s host=%s database=%s)", user, host, database)
 }
 
 func migrate(db *sql.DB, dialect string) error {
@@ -417,6 +452,8 @@ func (a *app) handleLockByID(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			a.getLock(w, id)
+		case http.MethodPatch:
+			a.updateUnlockTime(w, r, id)
 		case http.MethodDelete:
 			a.deleteLock(w, r, id)
 		default:
@@ -522,40 +559,79 @@ func (a *app) insertLock(name string, secretText string, unlockAt string, unlock
 	return result.LastInsertId()
 }
 
-func parseRequestedUnlock(input createLockRequest) (time.Time, string, string, int, error) {
-	timezoneName := strings.TrimSpace(input.TimezoneName)
+type unlockTimeInput interface {
+	requestedUnlockAt() string
+	requestedUnlockLocal() string
+	requestedTimezoneName() string
+	requestedTimezoneOffsetMinutes() *int
+}
+
+func (input createLockRequest) requestedUnlockAt() string {
+	return input.UnlockAt
+}
+
+func (input createLockRequest) requestedUnlockLocal() string {
+	return input.UnlockLocal
+}
+
+func (input createLockRequest) requestedTimezoneName() string {
+	return input.TimezoneName
+}
+
+func (input createLockRequest) requestedTimezoneOffsetMinutes() *int {
+	return input.TimezoneOffsetMinutes
+}
+
+func (input updateUnlockTimeRequest) requestedUnlockAt() string {
+	return input.UnlockAt
+}
+
+func (input updateUnlockTimeRequest) requestedUnlockLocal() string {
+	return input.UnlockLocal
+}
+
+func (input updateUnlockTimeRequest) requestedTimezoneName() string {
+	return input.TimezoneName
+}
+
+func (input updateUnlockTimeRequest) requestedTimezoneOffsetMinutes() *int {
+	return input.TimezoneOffsetMinutes
+}
+
+func parseRequestedUnlock(input unlockTimeInput) (time.Time, string, string, int, error) {
+	timezoneName := strings.TrimSpace(input.requestedTimezoneName())
 	if timezoneName == "" {
 		timezoneName = "Local"
 	}
 
-	if input.UnlockLocal != "" {
-		if input.TimezoneOffsetMinutes == nil {
+	if input.requestedUnlockLocal() != "" {
+		if input.requestedTimezoneOffsetMinutes() == nil {
 			return time.Time{}, "", "", 0, errors.New("timezoneOffsetMinutes is required with unlockLocal")
 		}
-		local, err := time.Parse("2006-01-02T15:04", input.UnlockLocal)
+		local, err := time.Parse("2006-01-02T15:04", input.requestedUnlockLocal())
 		if err != nil {
 			return time.Time{}, "", "", 0, errors.New("unlockLocal must be YYYY-MM-DDTHH:mm")
 		}
-		offsetMinutes := *input.TimezoneOffsetMinutes
+		offsetMinutes := *input.requestedTimezoneOffsetMinutes()
 		location := time.FixedZone(timezoneName, -offsetMinutes*60)
 		unlockAt := time.Date(local.Year(), local.Month(), local.Day(), local.Hour(), local.Minute(), 0, 0, location)
-		return unlockAt.UTC(), input.UnlockLocal, timezoneName, offsetMinutes, nil
+		return unlockAt.UTC(), input.requestedUnlockLocal(), timezoneName, offsetMinutes, nil
 	}
 
-	unlockAt, err := time.Parse(time.RFC3339, input.UnlockAt)
+	unlockAt, err := time.Parse(time.RFC3339, input.requestedUnlockAt())
 	if err != nil {
-		local, localErr := time.Parse("2006-01-02T15:04", input.UnlockAt)
+		local, localErr := time.Parse("2006-01-02T15:04", input.requestedUnlockAt())
 		if localErr != nil {
 			return time.Time{}, "", "", 0, errors.New("unlockAt must be RFC3339 or YYYY-MM-DDTHH:mm")
 		}
 		offsetMinutes := 0
 		location := time.FixedZone(timezoneName, 0)
-		if input.TimezoneOffsetMinutes != nil {
-			offsetMinutes = *input.TimezoneOffsetMinutes
+		if input.requestedTimezoneOffsetMinutes() != nil {
+			offsetMinutes = *input.requestedTimezoneOffsetMinutes()
 			location = time.FixedZone(timezoneName, -offsetMinutes*60)
 		}
 		localAt := time.Date(local.Year(), local.Month(), local.Day(), local.Hour(), local.Minute(), 0, 0, location)
-		return localAt.UTC(), input.UnlockAt, timezoneName, offsetMinutes, nil
+		return localAt.UTC(), input.requestedUnlockAt(), timezoneName, offsetMinutes, nil
 	}
 	return unlockAt.UTC(), unlockAt.UTC().Format("2006-01-02T15:04"), "UTC", 0, nil
 }
@@ -571,6 +647,65 @@ func (a *app) getLock(w http.ResponseWriter, id int64) {
 		return
 	}
 	writeJSON(w, http.StatusOK, item)
+}
+
+func (a *app) updateUnlockTime(w http.ResponseWriter, r *http.Request, id int64) {
+	var input updateUnlockTimeRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	unlockAt, unlockLocal, timezoneName, timezoneOffsetMinutes, err := parseRequestedUnlock(input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	item, err := a.findRawLock(id)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "lock not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load lock")
+		return
+	}
+	if item.Unlocked == 1 {
+		writeError(w, http.StatusConflict, "paid locks cannot be relocked")
+		return
+	}
+	if !unlockTimePassed(item.UnlockAt) {
+		writeError(w, http.StatusConflict, "only time-opened locks can change unlock time")
+		return
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	result, err := a.db.Exec(
+		a.query(`UPDATE locks SET unlock_at = ?, unlock_local = ?, timezone_name = ?, timezone_offset_minutes = ?, updated_at = ? WHERE id = ?`),
+		unlockAt.UTC().Format(time.RFC3339),
+		unlockLocal,
+		timezoneName,
+		timezoneOffsetMinutes,
+		now,
+		id,
+	)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update unlock time")
+		return
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		writeError(w, http.StatusNotFound, "lock not found")
+		return
+	}
+
+	updated, err := a.findLock(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load lock")
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
 }
 
 func (a *app) createStripeCheckout(w http.ResponseWriter, id int64) {

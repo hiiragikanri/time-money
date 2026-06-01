@@ -275,6 +275,17 @@ dd {
   font-weight: 850;
 }
 
+.relock-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 14px;
+  border-radius: 8px;
+  background: #f5f1e8;
+  padding: 12px;
+}
+
 .locked-copy {
   margin-bottom: 0;
   color: #5e554d;
@@ -328,7 +339,8 @@ button:disabled {
   }
 
   .field-row,
-  .meta-grid {
+  .meta-grid,
+  .relock-panel {
     grid-template-columns: 1fr;
   }
 }
