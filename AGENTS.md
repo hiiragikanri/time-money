@@ -4,7 +4,7 @@
 
 Time or Money is a small single-user app for creating text locks that open after a saved unlock time or after Stripe Checkout payment.
 
-- Frontend: React from CDN, source in `frontend/`
+- Frontend: React/Vite source in `frontend/`, production build in `frontend/dist`
 - Backend: Go HTTP server in `backend/`
 - Database: SQLite locally by default, Supabase/Postgres in production through `DATABASE_URL`
 - Production URL: `https://time-money.onrender.com`
@@ -13,6 +13,10 @@ Time or Money is a small single-user app for creating text locks that open after
 ## Run Locally
 
 ```powershell
+cd frontend
+npm install
+npm run build
+
 cd backend
 go mod tidy
 go run .
@@ -27,7 +31,7 @@ Useful local env template:
 ```env
 DATABASE_URL=""
 PUBLIC_BASE_URL="http://localhost:5173"
-APP_ENV="development"
+APP_ENV=""
 STRIPE_SECRET_KEY=""
 STRIPE_WEBHOOK_SECRET=""
 ```
@@ -39,7 +43,7 @@ If `DATABASE_URL` is empty, the app uses `backend/data/app.db`. Both `backend/.e
 Render runs the Go service from the `backend` directory.
 
 - Root Directory: `backend`
-- Build Command: `go build -tags netgo -ldflags '-s -w' -o app`
+- Build Command: `cd ../frontend && npm install && npm run build && cd ../backend && go build -tags netgo -ldflags '-s -w' -o app`
 - Start Command: `./app`
 
 Render environment variables:
@@ -52,7 +56,7 @@ STRIPE_SECRET_KEY="sk_test_or_sk_live..."
 STRIPE_WEBHOOK_SECRET="whsec_..."
 ```
 
-`PUBLIC_BASE_URL` is used to build Stripe Checkout `success_url` and `cancel_url`. If it is accidentally set to `localhost`, Checkout will return users to the wrong place.
+`PUBLIC_BASE_URL` is used to build Stripe Checkout `success_url` and `cancel_url`. If it is accidentally set to `localhost`, Checkout will return users to the wrong place. The Go server serves `frontend/dist` unless `APP_ENV=development` is set.
 
 ## Stripe Notes
 
@@ -104,14 +108,18 @@ Manual run:
 
 ## Verification Before Push
 
-Run backend tests:
+Run frontend build and backend tests:
 
 ```powershell
+cd frontend
+npm install
+npm run build
+
 cd backend
 go test ./...
 ```
 
-For frontend-only changes, there is no build step yet because the app uses browser-loaded React/Babel. Still inspect `frontend/src/App.jsx` for syntax carefully; a JSX syntax error breaks the page at runtime.
+For frontend-only changes, the Vite build is the syntax check and production bundle generator.
 
 ## Style And Safety Preferences
 

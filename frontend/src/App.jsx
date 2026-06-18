@@ -1,10 +1,8 @@
-const { useEffect, useState } = React;
+import React, { useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
+import "./styles.css";
 
 const api = {
-  async config() {
-    const response = await fetch("/api/config");
-    return parseResponse(response);
-  },
   async listLocks() {
     const response = await fetch("/api/locks");
     return parseResponse(response);
@@ -94,9 +92,7 @@ function formatRemaining(ms) {
 }
 
 function statusFor(lock) {
-  if (lock.unlocked) {
-    return "開封済み";
-  }
+  if (lock.unlocked) return "開封済み";
   if (lock.isOpen || getRemaining(lock.unlockAt) <= 0) return "時間で開封可能";
   return "ロック中";
 }
@@ -153,6 +149,7 @@ function App() {
   async function handleCreate(event) {
     event.preventDefault();
     setMessage("");
+
     const trimmed = secretText.trim();
     if (!trimmed) {
       setMessage("中身を入力してください。");
@@ -183,19 +180,18 @@ function App() {
     }
   }
 
-  function requestDelete(kind, item) {
+  function requestDelete(item) {
     setDeleteText("");
-    setDeleteDialog({ kind, item });
+    setDeleteDialog(item);
   }
 
   async function confirmDelete() {
     if (deleteText !== "delete" || !deleteDialog) return;
     setMessage("");
+
     try {
-      if (deleteDialog.kind === "lock") {
-        await api.remove(deleteDialog.item.id);
-        setMessage("ロックを削除しました。");
-      }
+      await api.remove(deleteDialog.id);
+      setMessage("ロックを削除しました。");
       setDeleteDialog(null);
       setDeleteText("");
       await refreshAll();
@@ -219,11 +215,12 @@ function App() {
         document.execCommand("copy");
         document.body.removeChild(textarea);
       }
+
       setCopiedLockId(lock.id);
       window.setTimeout(() => {
         setCopiedLockId((current) => (current === lock.id ? null : current));
       }, 1600);
-    } catch (error) {
+    } catch {
       setMessage("コピーできませんでした。");
     }
   }
@@ -328,6 +325,7 @@ function App() {
                 const canOpenByTime = lock.isOpen || getRemaining(lock.unlockAt) <= 0;
                 const visible = lock.unlocked || canOpenByTime;
                 const canChangeUnlockTime = !lock.unlocked && canOpenByTime;
+
                 return (
                   <article className="lock-card" key={lock.id}>
                     <div className="lock-card-header">
@@ -374,7 +372,7 @@ function App() {
                     )}
 
                     <div className="card-actions">
-                      <button className="danger-button" type="button" onClick={() => requestDelete("lock", lock)}>削除</button>
+                      <button className="danger-button" type="button" onClick={() => requestDelete(lock)}>削除</button>
                     </div>
                   </article>
                 );
@@ -390,7 +388,7 @@ function App() {
             <p className="eyebrow">Delete</p>
             <h2 id="delete-title">本当に削除しますか</h2>
             <p className="locked-copy">
-              {deleteDialog.item.name || `Lock #${deleteDialog.item.id}`} をDBから削除します。
+              {deleteDialog.name || `Lock #${deleteDialog.id}`} を削除します。
               続けるには「delete」と入力してください。
             </p>
             <input value={deleteText} onChange={(event) => setDeleteText(event.target.value)} placeholder="delete" autoFocus />
@@ -405,4 +403,4 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(<App />);

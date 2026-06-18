@@ -32,6 +32,7 @@ type app struct {
 	db                  *sql.DB
 	dialect             string
 	static              http.Handler
+	staticRoot          string
 	stripeKey           string
 	stripeWebhookSecret string
 	baseURL             string
@@ -130,14 +131,17 @@ func main() {
 		port = defaultPort
 	}
 
+	devMode := isDevMode()
+	staticRoot := frontendStaticRoot(devMode)
 	application := &app{
 		db:                  db,
 		dialect:             dialect,
-		static:              http.FileServer(http.Dir("../frontend")),
+		static:              http.FileServer(http.Dir(staticRoot)),
+		staticRoot:          staticRoot,
 		stripeKey:           os.Getenv("STRIPE_SECRET_KEY"),
 		stripeWebhookSecret: os.Getenv("STRIPE_WEBHOOK_SECRET"),
 		baseURL:             configuredBaseURL(port),
-		devMode:             isDevMode(),
+		devMode:             devMode,
 	}
 
 	log.Printf("Time or Money running at http://localhost:%s using %s", port, dialect)
@@ -370,7 +374,7 @@ func isDevMode() bool {
 	if env == "production" || env == "prod" || os.Getenv("RENDER") != "" {
 		return false
 	}
-	return true
+	return false
 }
 
 func (a *app) handleConfig(w http.ResponseWriter, r *http.Request) {
@@ -1148,14 +1152,26 @@ func (a *app) spaHandler() http.HandlerFunc {
 		}
 
 		cleanPath := strings.TrimPrefix(filepath.Clean(r.URL.Path), string(filepath.Separator))
-		localPath := filepath.Join("../frontend", cleanPath)
+		localPath := filepath.Join(a.staticRoot, cleanPath)
 		if info, err := os.Stat(localPath); err == nil && !info.IsDir() {
 			a.static.ServeHTTP(w, r)
 			return
 		}
 
-		http.ServeFile(w, r, "../frontend/index.html")
+		http.ServeFile(w, r, filepath.Join(a.staticRoot, "index.html"))
 	}
+}
+
+func frontendStaticRoot(devMode bool) string {
+	if devMode {
+		return "../frontend"
+	}
+
+	if _, err := os.Stat("../frontend/dist/index.html"); err == nil {
+		return "../frontend/dist"
+	}
+
+	return "../frontend"
 }
 
 func (a *app) handleReload(w http.ResponseWriter, r *http.Request) {

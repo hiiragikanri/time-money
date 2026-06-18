@@ -5,13 +5,17 @@ React + Go + SQLite/Postgres app for creating locked text entries that open afte
 ## Requirements
 
 - Go 1.22+
-- Internet access for the React CDN files used by the frontend
+- Node.js 20+
 
 ## Run
 
 Edit `backend/.env` if you want Supabase or Stripe settings. Empty database settings keep local SQLite.
 
 ```powershell
+cd frontend
+npm install
+npm run build
+
 cd backend
 go mod tidy
 go run .
@@ -63,8 +67,9 @@ The webhook is the durable payment path. The redirect verification remains as a 
 ## Notes
 
 - If `STRIPE_SECRET_KEY` is not set, paid early unlocks are disabled.
+- Production serves the built frontend from `frontend/dist`; run `npm run build` after frontend changes.
 - Purchase history is persisted in `purchase_events` with `provider`, `provider_payment_id`, and `status`.
 - Purchase history is not exposed through a public API.
 - Locks require typing `delete` before deletion.
-- `/dev/reload` is only registered in development mode. Set `APP_ENV=production` on production hosts.
+- `/dev/reload` is only registered when `APP_ENV=development`. The default Go server serves `frontend/dist`.
 - Lock creation stores the selected local time, browser timezone name, and timezone offset. Unlock checks use the server-side UTC instant saved at creation time, so changing region or IP later does not make a lock open earlier.
