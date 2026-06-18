@@ -71,5 +71,5 @@ The webhook is the durable payment path. The redirect verification remains as a 
 - Purchase history is persisted in `purchase_events` with `provider`, `provider_payment_id`, and `status`.
 - Purchase history is not exposed through a public API.
 - Locks require typing `delete` before deletion.
-- `/dev/reload` is only registered when `APP_ENV=development`. The default Go server serves `frontend/dist`.
+- `/dev/reload` is only registered when `APP_ENV=development`. The Go server serves `frontend/dist` whenever it exists.
 - Lock creation stores the selected local time, browser timezone name, and timezone offset. Unlock checks use the server-side UTC instant saved at creation time, so changing region or IP later does not make a lock open earlier.

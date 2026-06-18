@@ -56,7 +56,7 @@ STRIPE_SECRET_KEY="sk_test_or_sk_live..."
 STRIPE_WEBHOOK_SECRET="whsec_..."
 ```
 
-`PUBLIC_BASE_URL` is used to build Stripe Checkout `success_url` and `cancel_url`. If it is accidentally set to `localhost`, Checkout will return users to the wrong place. The Go server serves `frontend/dist` unless `APP_ENV=development` is set.
+`PUBLIC_BASE_URL` is used to build Stripe Checkout `success_url` and `cancel_url`. If it is accidentally set to `localhost`, Checkout will return users to the wrong place. The Go server serves `frontend/dist` whenever it exists.
 
 ## Stripe Notes
 

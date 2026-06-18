@@ -1163,12 +1163,12 @@ func (a *app) spaHandler() http.HandlerFunc {
 }
 
 func frontendStaticRoot(devMode bool) string {
-	if devMode {
-		return "../frontend"
-	}
-
 	if _, err := os.Stat("../frontend/dist/index.html"); err == nil {
 		return "../frontend/dist"
+	}
+
+	if devMode {
+		return "../frontend"
 	}
 
 	return "../frontend"
