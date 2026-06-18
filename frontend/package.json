@@ -1,4 +1,5 @@
 {
+  "name": "time-money-frontend",
   "private": true,
   "scripts": {
     "build": "vite build",
